@@ -1,9 +1,6 @@
 import asyncio
-import json
 import math
 import multiprocessing
-import sys
-from datetime import datetime, timedelta
 from io import BytesIO
 from typing import Never
 
@@ -12,12 +9,9 @@ from gtts import gTTS
 from pydub import AudioSegment
 from pydub.effects import speedup
 from pydub.playback import play
-from websockets.asyncio.client import connect
-from websockets.exceptions import ConnectionClosed
 
-from config import load_config
-from logger_config import logger
-from models import Config, Message, SpeakableMessage, TextContent
+from tts.logger_config import logger
+from tts.models import Config, Message, SpeakableMessage, TextContent
 
 
 class TTS:
@@ -137,64 +131,3 @@ class TTS:
             # Only speak if the message hasan't been cancelled and set to None
             if self._current_message is not None:
                 await self.speak(spoken_message)
-
-
-class TTSClient:
-    def __init__(self, config: Config) -> None:
-        self.name = config.name
-        self.version = config.version
-        self.tts = TTS(config)
-
-    async def listen(self) -> Never:
-        uri = "ws://127.0.0.1:8356"
-        async with connect(uri) as websocket:
-            hello_message = {
-                "data": {
-                    "client": {
-                        "name": self.name,
-                        "version": self.version,
-                        "type": "MAIN_WEBSOCKETCLIENT",
-                    },
-                },
-                "type": "HELLO",
-            }
-
-            # Send starting message
-            await websocket.send(json.dumps(hello_message))
-
-            logger.info(f"Listening to messages on {uri}")
-
-            while True:
-                try:
-                    payload = json.loads(await websocket.recv())
-
-                    if payload["type"] == "NEW_MESSAGES_RECEIVED":
-                        messages = [Message(**message) for message in payload["data"]["messages"]]
-                        for message in messages:
-                            # Ignore messages that were received more than 10 seconds ago
-                            # to avoid reading the message history on startup
-                            if message.receivedAt < datetime.now() - timedelta(seconds=10):
-                                continue
-                            await self.tts.new_message(message)
-
-                    elif payload["type"] == "MESSAGES_CHANGED":
-                        messages = [Message(**message) for message in payload["data"]["messages"]]
-                        for message in messages:
-                            await self.tts.message_change(message)
-
-                except ConnectionClosed as e:
-                    logger.critical(f"Connection closed: {e}")
-                    sys.exit(1)
-
-                except Exception as e:
-                    logger.error(f"Uncaught exception: {e}")
-
-    async def start(self) -> None:
-        # Runs the coroutines asynchronously in parallel
-        await asyncio.gather(self.listen(), self.tts.consume_messages())
-
-
-if __name__ == "__main__":
-    config = load_config()
-    client = TTSClient(config)
-    asyncio.run(client.start())

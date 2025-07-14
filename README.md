@@ -31,7 +31,7 @@ Copy the default configuration file default_config.toml to config.toml. Configur
 Run the client using python when AxelChat is running.
 
 ```sh
-python tts.py
+python -m tts
 # or
-uv run tts.py
+uv run -m tts
 ```

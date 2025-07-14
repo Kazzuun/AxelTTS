@@ -1,8 +1,8 @@
 import tomllib
 from pathlib import Path
 
-from logger_config import logger
-from models import Config
+from tts.logger_config import logger
+from tts.models import Config
 
 
 def load_config() -> Config:
