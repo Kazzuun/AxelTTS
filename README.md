@@ -1,0 +1,31 @@
+# AxelTTS
+
+TTS client for [AxelChat](https://github.com/3dproger/AxelChat).
+
+NOTE: Currently only tested on Windows and only using Twitch so not sure how it works elsewhere.
+
+## Setup
+
+Python >= 3.12 is required. If you don't have it, you can follow instructions on how to install uv and install python with it at https://docs.astral.sh/uv/.
+
+Download the dependencies as well.
+```bash
+uv pip install .
+```
+
+FFmpeg must be installed for audio playback.
+Easiest way is to use choco or manually download it from https://ffmpeg.org/download.html.
+
+```powershell
+choco install ffmpeg
+```
+
+## Usage
+
+Run the client using python when AxelChat is running.
+
+```sh
+python tts.py
+```
+
+You can change TTS related values in the code.
