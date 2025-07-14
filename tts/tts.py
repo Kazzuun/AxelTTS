@@ -103,27 +103,33 @@ class TTS:
                 continue
             message = " ".join(message_parts)
 
+            platform = message_data.author.serviceId
+            username = message_data.author.name
+            # For non ascii usernames, get the pronounciation to allow english TTS to say it
+            if not username.isascii():
+                name_lang = await self.translator.detect(username)
+                detected_lang = name_lang.lang
+                # Translate to the same language just to get the pronounciation
+                translation = await self.translator.translate(username, dest=detected_lang, src=detected_lang)
+                username = translation.pronunciation
+
+            # Translate any messages that are not in the allowed languages
             detection = await self.translator.detect(message)
             source = detection.lang
             confidence = detection.confidence
-
             destination = source if source in self.allowed_languages else "en"
-
-            # TODO: Figure out a better way to get the english name
-            user = message_data.author.pageUrl.split("/")[-1].removeprefix("@")
-            platform = message_data.author.serviceId
 
             if source != destination and confidence > self.translation_confidence_threshold:
                 message = await self.translator.translate(message, dest=destination, src=source)
                 source_language = LANGUAGES[source]
                 spoken_message = SpeakableMessage(
-                    intro=f"{user} from {platform} said in {source_language}",
+                    intro=f"{username} from {platform} said in {source_language}",
                     message=message.text,
                     message_language=destination,
                 )
             else:
                 spoken_message = SpeakableMessage(
-                    intro=f"{user} from {platform} said",
+                    intro=f"{username} from {platform} said",
                     message=message,
                     message_language=destination,
                 )
