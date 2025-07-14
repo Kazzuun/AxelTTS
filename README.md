@@ -10,7 +10,11 @@ Python >= 3.12 is required. If you don't have it, you can follow instructions on
 
 Download the dependencies as well.
 ```bash
-uv pip install .
+# 1. Create a vortual environment
+uv venv
+# 2. Activate it according to the instructions the prior command gives
+# 3. Install the dependencies
+uv sync
 ```
 
 FFmpeg must be installed for audio playback.
@@ -26,6 +30,8 @@ Run the client using python when AxelChat is running.
 
 ```sh
 python tts.py
+# or
+uv run tts.py
 ```
 
 You can change TTS related values in the code.
