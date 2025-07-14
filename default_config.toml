@@ -1,0 +1,19 @@
+[app]
+name = "AxelTTS"
+version = "v0.1.0"
+
+[tts]
+# Volume is a relative multiplier and must be greater than 0
+playback_volume = 1
+# Speed is a relative multiplier and must be greater than or equal to 1
+playback_speed = 1
+# Languages that are not translated and read in that language.
+# English is the default language and should not be removed.
+# For most of the language codes, read https://cloud.google.com/translate/docs/languages,
+# but not all of them are supported 
+allowed_languages = ["en"]
+# Localized accent used for the english voice. 
+# For possible values, read https://gtts.readthedocs.io/en/latest/module.html#localized-accents
+english_accent = "ca"
+# Threshold used to determine when to translate a message. Value is between 0 and 1.
+translation_confidence_threshold = 0.5

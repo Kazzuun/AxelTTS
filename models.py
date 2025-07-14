@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from gtts.accents import accents
+from gtts.lang import tts_langs
+from pydantic import BaseModel, Field, field_validator
 
 
 class Author(BaseModel):
@@ -76,3 +78,30 @@ class SpeakableMessage(BaseModel):
     intro: str
     message: str
     message_language: str
+
+
+class Config(BaseModel):
+    name: str
+    version: str
+
+    playback_volume: float = Field(gt=0)
+    playback_speed: float = Field(ge=1)
+    allowed_languages: list[str]
+    english_accent: str
+    translation_confidence_threshold: float = Field(ge=0, le=1)
+
+    @field_validator("allowed_languages", mode="before")
+    @classmethod
+    def validate_languages(cls, languages: list[str]) -> list[str]:
+        valid_langs = tts_langs()
+        for language in languages:
+            if language not in valid_langs:
+                raise ValueError(f"Unsupported language code: {language}")
+        return languages
+
+    @field_validator("english_accent", mode="before")
+    @classmethod
+    def validate_accent(cls, accent: str) -> str:
+        if accent not in accents:
+            raise ValueError(f"Invalid accent code: {accent}")
+        return accent

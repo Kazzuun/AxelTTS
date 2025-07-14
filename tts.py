@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import math
 import multiprocessing
 import sys
@@ -16,27 +15,25 @@ from pydub.playback import play
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed
 
-from models import Message, SpeakableMessage, TextContent
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from config import load_config
+from logger_config import logger
+from models import Config, Message, SpeakableMessage, TextContent
 
 
 class TTS:
-    def __init__(self) -> None:
+    def __init__(self, config: Config) -> None:
         self.message_queue: asyncio.Queue[Message] = asyncio.Queue()
         self._audio_process: multiprocessing.Process | None = None
         self._current_message: Message | None = None
 
-        self.playback_volume = 0.5
-        self.playback_speed = 1.4
+        self.playback_volume = config.playback_volume
+        self.playback_speed = config.playback_speed
 
         self.translator = Translator()
-        self.translation_confidence_threshold = 0.5
+        self.translation_confidence_threshold = config.translation_confidence_threshold
 
-        self.allowed_languages = ["en", "ja"]
-        # https://gtts.readthedocs.io/en/latest/module.html#localized-accents
-        self.english_accent = "ca"
+        self.allowed_languages = config.allowed_languages
+        self.english_accent = config.english_accent
 
     async def new_message(self, message: Message) -> None:
         await self.message_queue.put(message)
@@ -72,7 +69,8 @@ class TTS:
         mp3_fp.seek(0)
 
         audio: AudioSegment = AudioSegment.from_file(mp3_fp, "mp3")
-        audio = speedup(audio, self.playback_speed)
+        if self.playback_speed > 1:
+            audio = speedup(audio, self.playback_speed)
         audio = audio + 20 * math.log10(self.playback_volume)
 
         return audio
@@ -142,10 +140,10 @@ class TTS:
 
 
 class TTSClient:
-    def __init__(self) -> None:
-        self.name = "TTS"
-        self.version = "v0.1.0"
-        self.tts = TTS()
+    def __init__(self, config: Config) -> None:
+        self.name = config.name
+        self.version = config.version
+        self.tts = TTS(config)
 
     async def listen(self) -> Never:
         uri = "ws://127.0.0.1:8356"
@@ -197,5 +195,6 @@ class TTSClient:
 
 
 if __name__ == "__main__":
-    client = TTSClient()
+    config = load_config()
+    client = TTSClient(config)
     asyncio.run(client.start())

@@ -26,6 +26,8 @@ choco install ffmpeg
 
 ## Usage
 
+Copy the default configuration file default_config.toml to config.toml. Configure the values to your liking.
+
 Run the client using python when AxelChat is running.
 
 ```sh
@@ -33,5 +35,3 @@ python tts.py
 # or
 uv run tts.py
 ```
-
-You can change TTS related values in the code.
