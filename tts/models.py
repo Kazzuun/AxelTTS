@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Self
+from typing import Any
 
 from gtts.accents import accents
 from gtts.lang import tts_langs
@@ -84,14 +84,9 @@ class Message(BaseModel):
 
 
 class SpeakableMessagePart(BaseModel):
+    author: str | None = None
     text: str
     language: str
-
-    def __add__(self, other: Self) -> Self:
-        if other.language != self.language:
-            raise ValueError("Languages must be the same")
-        self.text += f" {other.text}"
-        return self
 
 
 class Config(BaseModel):
@@ -100,8 +95,11 @@ class Config(BaseModel):
 
     playback_volume: float = Field(gt=0)
     playback_speed: float = Field(ge=1)
+
     allowed_languages: list[str]
-    english_accent: str
+    default_english_accent: str
+    random_user_english_accents: list[str]
+
     translation_confidence_threshold: float = Field(ge=0, le=1)
 
     @field_validator("allowed_languages", mode="before")
@@ -113,9 +111,24 @@ class Config(BaseModel):
                 raise ValueError(f"Unsupported language code: {language}")
         return languages
 
-    @field_validator("english_accent", mode="before")
+    @field_validator("default_english_accent", mode="before")
     @classmethod
     def validate_accent(cls, accent: str) -> str:
         if accent not in accents:
             raise ValueError(f"Invalid accent code: {accent}")
         return accent
+
+    @field_validator("random_user_english_accents", mode="before")
+    @classmethod
+    def validate_random_accents(cls, accents: list[str]) -> list[str]:
+        for accent in accents:
+            if accent not in accents:
+                raise ValueError(f"Invalid accent code: {accent}")
+        return accents
+
+    @field_validator("random_user_english_accents", mode="after")
+    @classmethod
+    def default_random_accent(cls, accents: list[str]) -> list[str]:
+        if len(accents) == 0:
+            return [cls.default_english_accent]
+        return accents

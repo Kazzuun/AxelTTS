@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import math
 import multiprocessing
 from io import BytesIO
@@ -27,7 +28,8 @@ class TTS:
         self.translation_confidence_threshold = config.translation_confidence_threshold
 
         self.allowed_languages = config.allowed_languages
-        self.english_accent = config.english_accent
+        self.default_english_accent = config.default_english_accent
+        self.random_user_english_accents = config.random_user_english_accents
 
     async def new_message(self, message: Message) -> None:
         await self.message_queue.put(message)
@@ -55,9 +57,19 @@ class TTS:
             new_queue.put_nowait(message)
         self.message_queue = new_queue
 
+    def english_accent(self, user: str | None) -> str:
+        if user is None:
+            return self.default_english_accent
+        # Get a random number by hashing the username.
+        # This gives a random value that stays the same for the same user
+        hash_bytes = hashlib.sha256(user.encode("utf-8")).digest()
+        hash_int = int.from_bytes(hash_bytes)
+        accent_index = hash_int % len(self.random_user_english_accents)
+        return self.random_user_english_accents[accent_index]
+
     async def text_to_audio(self, message_part: SpeakableMessagePart) -> AudioSegment:
         tts = (
-            gTTS(message_part.text, tld=self.english_accent)
+            gTTS(message_part.text, lang="en", tld=self.english_accent(message_part.author))
             if message_part.language == "en"
             else gTTS(message_part.text, lang=message_part.language)
         )
@@ -128,23 +140,15 @@ class TTS:
                     # Translate any messages that are not in the allowed languages and when confident enough that
                     # it is actually that language. This allows understanding messages that are not in allowed languages
                     translated = await self.translator.translate(message, dest="en", src=message_language)
-                    message_parts.append(SpeakableMessagePart(text=translated.text, language="en"))
+                    message_parts.append(SpeakableMessagePart(author=username, text=translated.text, language="en"))
                 elif message_language in self.allowed_languages:
-                    message_parts.append(SpeakableMessagePart(text=message, language=message_language))
+                    message_parts.append(SpeakableMessagePart(author=username, text=message, language=message_language))
                 else:
-                    message_parts.append(SpeakableMessagePart(text=message, language="en"))
-
-                # Merge consecutive parts in the same language
-                merged: list[SpeakableMessagePart] = []
-                for part in message_parts:
-                    if len(merged) > 0 and part.language == merged[-1].language:
-                        merged[-1] += part
-                    else:
-                        merged.append(part)
+                    message_parts.append(SpeakableMessagePart(author=username, text=message, language="en"))
 
                 # Only speak if the message hasan't been cancelled and set to None
                 if self._current_message is not None:
-                    await self.speak(merged)
+                    await self.speak(message_parts)
 
                 self._current_message = None
 

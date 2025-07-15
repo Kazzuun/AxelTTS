@@ -14,6 +14,10 @@ playback_speed = 1
 allowed_languages = ["en"]
 # Localized accent used for the english voice. 
 # For possible values, read https://gtts.readthedocs.io/en/latest/module.html#localized-accents
-english_accent = "ca"
+# This accent is used by default for the intro ("<user> from <platform> said")
+default_english_accent = "ca"
+# English accents that are randomly used for reading english messages.
+# If empty, default_english_accent is used.
+random_user_english_accents = ["com", "com.au", "ie", "co.uk"]
 # Threshold used to determine when to translate a message. Value is between 0 and 1.
 translation_confidence_threshold = 0.5
