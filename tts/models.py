@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Self
 
 from gtts.accents import accents
 from gtts.lang import tts_langs
@@ -73,11 +73,25 @@ class Message(BaseModel):
     rawType: str
     reply: Reply | None
 
+    @property
+    def text_message(self) -> str | None:
+        text_parts = [
+            part.data.text for part in self.contents if isinstance(part, TextContent) and part.data.text.strip()
+        ]
+        if len(text_parts) == 0:
+            return None
+        return " ".join(text_parts)
 
-class SpeakableMessage(BaseModel):
-    intro: str
-    message: str
-    message_language: str
+
+class SpeakableMessagePart(BaseModel):
+    text: str
+    language: str
+
+    def __add__(self, other: Self) -> Self:
+        if other.language != self.language:
+            raise ValueError("Languages must be the same")
+        self.text += f" {other.text}"
+        return self
 
 
 class Config(BaseModel):

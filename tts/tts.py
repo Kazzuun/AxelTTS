@@ -11,7 +11,7 @@ from pydub.effects import speedup
 from pydub.playback import play
 
 from tts.logger_config import logger
-from tts.models import Config, Message, SpeakableMessage, TextContent
+from tts.models import Config, Message, SpeakableMessagePart
 
 
 class TTS:
@@ -44,7 +44,6 @@ class TTS:
             if self._audio_process is not None:
                 self._audio_process.terminate()
             logger.info("Removed the current message from being processed")
-            return
 
         # Remove the deleted message from the queue
         new_queue: asyncio.Queue[Message] = asyncio.Queue()
@@ -56,8 +55,12 @@ class TTS:
             new_queue.put_nowait(message)
         self.message_queue = new_queue
 
-    async def text_to_audio(self, message: str, language: str) -> AudioSegment:
-        tts = gTTS(message, tld=self.english_accent) if language == "en" else gTTS(message, lang=language)
+    async def text_to_audio(self, message_part: SpeakableMessagePart) -> AudioSegment:
+        tts = (
+            gTTS(message_part.text, tld=self.english_accent)
+            if message_part.language == "en"
+            else gTTS(message_part.text, lang=message_part.language)
+        )
         mp3_fp = BytesIO()
         tts.write_to_fp(mp3_fp)
         mp3_fp.seek(0)
@@ -69,42 +72,36 @@ class TTS:
 
         return audio
 
-    async def speak(self, message: SpeakableMessage) -> None:
-        if message.message_language == "en":
-            audio = await self.text_to_audio(f"{message.intro}: {message.message}", "en")
-        else:
-            # For non-english messages, say the intro in english and the rest in the message language
-            audio_en = await self.text_to_audio(message.intro, "en")
-            audio_other = await self.text_to_audio(message.message, message.message_language)
-            audio = audio_en + audio_other
+    async def speak(self, message_parts: list[SpeakableMessagePart]) -> None:
+        audio = AudioSegment.empty()
+        for message_part in message_parts:
+            audio += await self.text_to_audio(message_part)
 
         self._audio_process = multiprocessing.Process(target=play, args=(audio,))
         self._audio_process.start()
 
+        # Wait until the process is done
+        while self._audio_process is not None and self._audio_process.is_alive():
+            await asyncio.sleep(0.1)
+
     async def consume_messages(self) -> Never:
         while True:
-            # Wait until the previous audio is done playing before consuming another one
-            while self._audio_process is not None and self._audio_process.is_alive():
-                await asyncio.sleep(0.1)
-
             message_data = await self.message_queue.get()
-            self._current_message = message_data
+
             logger.info(
                 f"Starting processing on {message_data.author.name}'s message: {self.message_queue.qsize()} messages"
             )
 
-            message_parts = message_data.contents
-            # Extract only the text parts
-            message_parts = [
-                part.data.text for part in message_parts if isinstance(part, TextContent) and part.data.text.strip()
-            ]
-            # Messages that don't contain text are skipped
-            if len(message_parts) == 0:
-                continue
-            message = " ".join(message_parts)
+            self._current_message = message_data
 
-            platform = message_data.author.serviceId
             username = message_data.author.name
+            platform = message_data.author.serviceId
+            message = message_data.text_message
+
+            # Messages that don't contain text are skipped
+            if message is None:
+                continue
+
             # For non ascii usernames, get the pronounciation to allow english TTS to say it
             if not username.isascii():
                 name_lang = await self.translator.detect(username)
@@ -113,27 +110,34 @@ class TTS:
                 translation = await self.translator.translate(username, dest=detected_lang, src=detected_lang)
                 username = translation.pronunciation
 
-            # Translate any messages that are not in the allowed languages
             detection = await self.translator.detect(message)
-            source = detection.lang
-            confidence = detection.confidence
-            destination = source if source in self.allowed_languages else "en"
+            message_language = detection.lang
+            confident = detection.confidence > self.translation_confidence_threshold
 
-            if source != destination and confidence > self.translation_confidence_threshold:
-                message = await self.translator.translate(message, dest=destination, src=source)
-                source_language = LANGUAGES[source]
-                spoken_message = SpeakableMessage(
-                    intro=f"{username} from {platform} said in {source_language}",
-                    message=message.text,
-                    message_language=destination,
-                )
+            message_parts: list[SpeakableMessagePart] = []
+
+            intro = f"{username} from {platform} said"
+            if message_language != "en" and confident:
+                intro += f" in {LANGUAGES[message_language]}"
+            message_parts.append(SpeakableMessagePart(text=intro, language="en"))
+
+            # Translate any messages that are not in the allowed languages
+            if message_language not in self.allowed_languages and confident:
+                translated = await self.translator.translate(message, dest="en", src=message_language)
+                message_parts.append(SpeakableMessagePart(text=translated.text, language="en"))
             else:
-                spoken_message = SpeakableMessage(
-                    intro=f"{username} from {platform} said",
-                    message=message,
-                    message_language=destination,
-                )
+                message_parts.append(SpeakableMessagePart(text=message, language=message_language))
+
+            # Merge consecutive parts in the same language
+            merged: list[SpeakableMessagePart] = []
+            for part in message_parts:
+                if len(merged) > 0 and part.language == merged[-1].language:
+                    merged[-1] += part
+                else:
+                    merged.append(part)
 
             # Only speak if the message hasan't been cancelled and set to None
             if self._current_message is not None:
-                await self.speak(spoken_message)
+                await self.speak(merged)
+
+            self._current_message = None
