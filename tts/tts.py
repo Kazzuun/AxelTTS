@@ -31,7 +31,7 @@ class TTS:
 
     async def new_message(self, message: Message) -> None:
         await self.message_queue.put(message)
-        logger.info(f"{message.author.name}'s message added to queue: {self.message_queue.qsize()} messages")
+        logger.info("%s's message added to queue: %d messages", message.author.name, self.message_queue.qsize())
 
     async def message_change(self, new_message: Message) -> None:
         # If the deleted message is the current one being processed, set it to None and cancel the possible audio task
@@ -50,7 +50,7 @@ class TTS:
         while not self.message_queue.empty():
             message = self.message_queue.get_nowait()
             if message.id == new_message.id and new_message.deletedOnPlatform:
-                logger.info(f"Removed {message.author.name}'s message from the queue")
+                logger.info("Removed %s's message from the queue", message.author.name)
                 continue
             new_queue.put_nowait(message)
         self.message_queue = new_queue
@@ -86,58 +86,67 @@ class TTS:
 
     async def consume_messages(self) -> Never:
         while True:
-            message_data = await self.message_queue.get()
+            try:
+                message_data = await self.message_queue.get()
 
-            logger.info(
-                f"Starting processing on {message_data.author.name}'s message: {self.message_queue.qsize()} messages"
-            )
+                logger.info(
+                    "Starting processing on %s's message: %d messages",
+                    message_data.author.name,
+                    self.message_queue.qsize(),
+                )
 
-            self._current_message = message_data
+                self._current_message = message_data
 
-            username = message_data.author.name
-            platform = message_data.author.serviceId
-            message = message_data.text_message
+                username = message_data.author.name
+                platform = message_data.author.serviceId
+                message = message_data.text_message
 
-            # Messages that don't contain text are skipped
-            if message is None:
-                continue
+                # Messages that don't contain text are skipped
+                if message is None:
+                    continue
 
-            # For non ascii usernames, get the pronounciation to allow english TTS to say it
-            if not username.isascii():
-                name_lang = await self.translator.detect(username)
-                detected_lang = name_lang.lang
-                # Translate to the same language just to get the pronounciation
-                translation = await self.translator.translate(username, dest=detected_lang, src=detected_lang)
-                username = translation.pronunciation
+                # For non ascii usernames, get the pronounciation to allow english TTS to say it
+                if not username.isascii():
+                    name_lang = await self.translator.detect(username)
+                    detected_lang = name_lang.lang
+                    # Translate to the same language just to get the pronounciation
+                    translation = await self.translator.translate(username, dest=detected_lang, src=detected_lang)
+                    username = translation.pronunciation
 
-            detection = await self.translator.detect(message)
-            message_language = detection.lang
-            confident = detection.confidence > self.translation_confidence_threshold
+                detection = await self.translator.detect(message)
+                message_language = detection.lang
+                confident = detection.confidence > self.translation_confidence_threshold
 
-            message_parts: list[SpeakableMessagePart] = []
+                message_parts: list[SpeakableMessagePart] = []
 
-            intro = f"{username} from {platform} said"
-            if message_language != "en" and confident:
-                intro += f" in {LANGUAGES[message_language]}"
-            message_parts.append(SpeakableMessagePart(text=intro, language="en"))
+                intro = f"{username} from {platform} said"
+                if message_language != "en" and confident:
+                    intro += f" in {LANGUAGES[message_language]}"
+                message_parts.append(SpeakableMessagePart(text=intro, language="en"))
 
-            # Translate any messages that are not in the allowed languages
-            if message_language not in self.allowed_languages and confident:
-                translated = await self.translator.translate(message, dest="en", src=message_language)
-                message_parts.append(SpeakableMessagePart(text=translated.text, language="en"))
-            else:
-                message_parts.append(SpeakableMessagePart(text=message, language=message_language))
-
-            # Merge consecutive parts in the same language
-            merged: list[SpeakableMessagePart] = []
-            for part in message_parts:
-                if len(merged) > 0 and part.language == merged[-1].language:
-                    merged[-1] += part
+                if message_language not in self.allowed_languages and confident:
+                    # Translate any messages that are not in the allowed languages and when confident enough that
+                    # it is actually that language. This allows understanding messages that are not in allowed languages
+                    translated = await self.translator.translate(message, dest="en", src=message_language)
+                    message_parts.append(SpeakableMessagePart(text=translated.text, language="en"))
+                elif message_language in self.allowed_languages:
+                    message_parts.append(SpeakableMessagePart(text=message, language=message_language))
                 else:
-                    merged.append(part)
+                    message_parts.append(SpeakableMessagePart(text=message, language="en"))
 
-            # Only speak if the message hasan't been cancelled and set to None
-            if self._current_message is not None:
-                await self.speak(merged)
+                # Merge consecutive parts in the same language
+                merged: list[SpeakableMessagePart] = []
+                for part in message_parts:
+                    if len(merged) > 0 and part.language == merged[-1].language:
+                        merged[-1] += part
+                    else:
+                        merged.append(part)
 
-            self._current_message = None
+                # Only speak if the message hasan't been cancelled and set to None
+                if self._current_message is not None:
+                    await self.speak(merged)
+
+                self._current_message = None
+
+            except Exception as e:
+                logger.error(f"Uncaught exception: {e}")
