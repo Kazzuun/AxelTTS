@@ -2,7 +2,7 @@
 
 TTS client for [AxelChat](https://github.com/3dproger/AxelChat).
 
-NOTE: Currently only tested on Windows and only using Twitch so not sure how it works elsewhere.
+NOTE: Currently only tested on Windows so not sure how it works elsewhere.
 
 ## Setup
 
@@ -17,8 +17,8 @@ uv venv
 uv sync
 ```
 
-FFmpeg must be installed for audio playback.
-Easiest way is to use choco or manually download it from https://ffmpeg.org/download.html.
+FFmpeg must be installed for audio processing.
+Easiest way is to use choco or some other package manager, or manually download it from https://ffmpeg.org/download.html.
 
 ```powershell
 choco install ffmpeg
@@ -26,12 +26,12 @@ choco install ffmpeg
 
 ## Usage
 
-Copy the default configuration file default_config.toml to config.toml. Configure the values to your liking.
+Copy the default configuration file default_config.toml and rename it to config.toml. Use config.toml to configure the values to your liking.
 
 Run the client using python when AxelChat is running.
 
 ```sh
-python -m tts
-# or
 uv run -m tts
+# or
+python -m tts
 ```
