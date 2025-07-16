@@ -89,10 +89,28 @@ class SpeakableMessagePart(BaseModel):
     language: str
 
 
-class Config(BaseModel):
+class PlatformRules(BaseModel):
+    ignored_users: list[str] = Field(default_factory=list)
+    nicknames: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("ignored_users", mode="after")
+    @classmethod
+    def lowercase_users(cls, users: list[str]) -> list[str]:
+        return [user.lower() for user in users]
+
+    @field_validator("nicknames", mode="after")
+    @classmethod
+    def lowercase_nicknames(cls, nicknames: dict[str, str]) -> dict[str, str]:
+        return {name.lower(): nickname.lower() for name, nickname in nicknames.items()}
+
+
+class AppConfig(BaseModel):
     name: str
     version: str
+    platform_rules: dict[str, PlatformRules]
 
+
+class TTSConfig(BaseModel):
     playback_volume: float = Field(gt=0)
     playback_speed: float = Field(ge=1)
 

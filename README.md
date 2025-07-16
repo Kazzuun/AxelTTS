@@ -4,15 +4,15 @@ TTS client for [AxelChat](https://github.com/3dproger/AxelChat).
 
 NOTE: Currently only tested on Windows so not sure how it works elsewhere.
 
-
 ## Features
 
 1. Connects to [AxelChat](https://github.com/3dproger/AxelChat) and reads the incoming messages with Google's TTS.
-2. States the username and platform the message is from.
+2. States the username and platform the message is from before reading the message.
 3. Translates any languages not defined as allowed in the config to English with Google Translate.
-4. Removes any deleted messages from the queue and interrupts the currently playing message if it is deleted in the chat.
+4. Removes any deleted messages from the queue and interrupts the currently playing message if it is deleted in the chat. Clearing AlexChat removes all the messages from the queue.
 5. Allows changing the volume, speed, translation threshold, allowed languages, and the english accents used.
-
+6. Allows ignoring users based on their username on platform basis. Good for ignoring bot messages.
+7. Allows giving nicknames for users on platform basis.
 
 ## Setup
 
