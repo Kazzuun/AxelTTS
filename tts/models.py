@@ -159,5 +159,5 @@ class Config(BaseModel):
             try:
                 re.compile(fil)
             except re.error as e:
-                raise ValueError(f"Invalid regex: {fil}") from e
+                raise ValueError(f"Invalid regex: '{fil}'") from e
         return filters

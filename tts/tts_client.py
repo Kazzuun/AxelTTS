@@ -32,7 +32,7 @@ class TTSClient:
                 if platform_rules is not None:
                     username = message.author.name.lower()
                     if username in platform_rules.ignored_users:
-                        logger.info("A message from %s was ignored", username)
+                        logger.info("A message from %s (%s) was ignored", username, message.author.serviceId)
                         return
                     elif username in platform_rules.nicknames:
                         message.author.name = platform_rules.nicknames[username]
@@ -41,8 +41,9 @@ class TTSClient:
                     for fil in self.config().filter:
                         if bool(re.compile(fil).match(message.text_message)):
                             logger.info(
-                                "%s's message was filtered because it matched the filter %s: %s",
+                                "Message from %s (%s) was filtered because it matched the filter %s: %s",
                                 message.author.name,
+                                message.author.serviceId,
                                 fil,
                                 message.text_message,
                             )

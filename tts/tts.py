@@ -30,10 +30,11 @@ class TTS:
     async def new_message(self, message: Message) -> None:
         await self.message_queue.put(message)
         logger.info(
-            "%s's message from %s added to queue: %d messages",
+            "Message from %s (%s) added to the queue (%d messages): %s",
             message.author.name,
             message.author.serviceId,
             self.message_queue.qsize(),
+            message.text_message,
         )
 
     def message_change(self, new_message: Message) -> None:
@@ -42,7 +43,11 @@ class TTS:
         while not self.message_queue.empty():
             message = self.message_queue.get_nowait()
             if message.id == new_message.id and new_message.deletedOnPlatform:
-                logger.info("Removed %s's message from the queue", message.author.name)
+                logger.info(
+                    "Removed %s (%s) message from the queue",
+                    message.author.name,
+                    message.author.serviceId,
+                )
                 continue
             new_queue.put_nowait(message)
         self.message_queue = new_queue
@@ -60,8 +65,9 @@ class TTS:
 
     def clear_messages(self) -> None:
         # Clear queue by replacing it with an empty one
+        queue_size = self.message_queue.qsize()
         self.message_queue = asyncio.Queue()
-        logger.info("Cleared all the messages from the queue")
+        logger.info("Cleared all the messages (%d) from the queue", queue_size)
 
         # Also cancel the possible current message
         if self._current_message is not None:
@@ -161,8 +167,9 @@ class TTS:
                 message_data = await self.message_queue.get()
 
                 logger.info(
-                    "Starting processing on %s's message: %d messages",
+                    "Processing %s (%s)'s message from the queue (%d messages left)",
                     message_data.author.name,
+                    message_data.author.serviceId,
                     self.message_queue.qsize(),
                 )
 
