@@ -39,7 +39,7 @@ class TTSClient:
 
                 if message.text_message is not None:
                     for fil in self.config().filter:
-                        if bool(re.compile(fil).match(message.text_message)):
+                        if bool(re.compile(fil).search(message.text_message)):
                             logger.info(
                                 "Message from %s (%s) was filtered because it matched the filter %s: %s",
                                 message.author.name,
