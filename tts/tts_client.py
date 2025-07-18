@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from datetime import datetime, timedelta
 from typing import Never
 
@@ -7,7 +8,7 @@ from pydantic import ValidationError
 from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosed
 
-from tts.config import load_app_config
+from tts.config import load_config
 from tts.logger_config import logger
 from tts.models import Message
 from tts.tts import TTS
@@ -15,7 +16,7 @@ from tts.tts import TTS
 
 class TTSClient:
     def __init__(self) -> None:
-        self.config = load_app_config
+        self.config = load_config
         self.tts = TTS()
 
     async def _process_message(self, payload: dict) -> None:
@@ -31,9 +32,21 @@ class TTSClient:
                 if platform_rules is not None:
                     username = message.author.name.lower()
                     if username in platform_rules.ignored_users:
-                        continue
+                        logger.info("A message from %s was ignored", username)
+                        return
                     elif username in platform_rules.nicknames:
                         message.author.name = platform_rules.nicknames[username]
+
+                if message.text_message is not None:
+                    for fil in self.config().filter:
+                        if bool(re.compile(fil).match(message.text_message)):
+                            logger.info(
+                                "%s's message was filtered because it matched the filter %s: %s",
+                                message.author.name,
+                                fil,
+                                message.text_message,
+                            )
+                            return
 
                 await self.tts.new_message(message)
 
@@ -81,6 +94,11 @@ class TTSClient:
 
                         except Exception as e:
                             logger.error(f"Uncaught exception: {e}")
+
+            except (ValueError, ValidationError) as e:
+                logger.error(f"Config file validation failed: {e}")
+                logger.info("Resuming in 5 seconds...")
+                await asyncio.sleep(5)
 
             except (ConnectionClosed, ConnectionError) as e:
                 logger.error(f"Connection error: {e}")

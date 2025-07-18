@@ -1,6 +1,6 @@
 [app]
 name = "AxelTTS"
-version = "v0.2.0"
+version = "v0.2.1"
 
 [tts]
 # Volume is a relative multiplier and must be greater than 0
@@ -21,6 +21,8 @@ default_english_accent = "ca"
 random_user_english_accents = ["com", "com.au", "ie", "co.uk"]
 # Threshold used to determine when to translate a message. Value is between 0 and 1.
 translation_confidence_threshold = 0.5
+# Regex rules for filtering messages. Filtered messages are not added to the TTS queue.
+filter = []
 
 # Below here platform specific rules can be configured. You can safely remove the examples in your own config.
 # Under [<platform>] in ignored_users, you can list all the usernames whose messages should be ignored on that platform.

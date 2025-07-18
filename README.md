@@ -12,7 +12,8 @@ NOTE: Currently only tested on Windows so not sure how it works elsewhere.
 4. Removes any deleted messages from the queue and interrupts the currently playing message if it is deleted in the chat. Clearing AlexChat removes all the messages from the queue.
 5. Allows changing the volume, speed, translation threshold, allowed languages, and the english accents used.
 6. Allows ignoring users based on their username on platform basis. Good for ignoring bot messages.
-7. Allows giving nicknames for users on platform basis.
+7. Allows filtering messages with regex.
+8. Allows giving nicknames for users on platform basis.
 
 ## Setup
 

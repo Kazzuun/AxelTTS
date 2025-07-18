@@ -12,14 +12,14 @@ from pydub import AudioSegment
 from pydub.effects import speedup
 from pydub.playback import play
 
-from tts.config import load_tts_config
+from tts.config import load_config
 from tts.logger_config import logger
 from tts.models import Message, SpeakableMessagePart
 
 
 class TTS:
     def __init__(self) -> None:
-        self.config = load_tts_config
+        self.config = load_config
 
         self.translator = Translator()
 

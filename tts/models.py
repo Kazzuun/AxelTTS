@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Any
 
@@ -104,13 +105,11 @@ class PlatformRules(BaseModel):
         return {name.lower(): nickname.lower() for name, nickname in nicknames.items()}
 
 
-class AppConfig(BaseModel):
+class Config(BaseModel):
     name: str
     version: str
     platform_rules: dict[str, PlatformRules]
 
-
-class TTSConfig(BaseModel):
     playback_volume: float = Field(gt=0)
     playback_speed: float = Field(ge=1)
 
@@ -119,6 +118,8 @@ class TTSConfig(BaseModel):
     random_user_english_accents: list[str]
 
     translation_confidence_threshold: float = Field(ge=0, le=1)
+
+    filter: list[str]
 
     @field_validator("allowed_languages", mode="before")
     @classmethod
@@ -150,3 +151,13 @@ class TTSConfig(BaseModel):
         if len(accents) == 0:
             return [cls.default_english_accent]
         return accents
+
+    @field_validator("filter", mode="before")
+    @classmethod
+    def validate_filter_regex(cls, filters: list[str]) -> list[str]:
+        for fil in filters:
+            try:
+                re.compile(fil)
+            except re.error as e:
+                raise ValueError(f"Invalid regex: {fil}") from e
+        return filters
