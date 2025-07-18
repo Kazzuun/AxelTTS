@@ -22,7 +22,16 @@ random_user_english_accents = ["com", "com.au", "ie", "co.uk"]
 # Threshold used to determine when to translate a message. Value is between 0 and 1.
 translation_confidence_threshold = 0.5
 # Regex rules for filtering messages. Filtered messages are not added to the TTS queue.
-filter = []
+filter = [
+    # Any messages with length 250 or over
+    ".{250,}",
+    # Any word in the message is 20 characters or longer
+    "\\b\\w{20,}\\b",
+    # Any word contains a character that is repeated 6 or more times in a row
+    "(.)\\1{5,}",
+    # Any word contains two characters that are repeated 3 or more times in a row (example: tststs)
+    "(.)(.)(\\1\\2){2,}",
+]
 
 # Below here platform specific rules can be configured. You can safely remove the examples in your own config.
 # Under [<platform>] in ignored_users, you can list all the usernames whose messages should be ignored on that platform.
