@@ -42,10 +42,10 @@ max_time_between_messages = 2.0
 # max(0, max_time_between_messages * (1 - N / no_wait_queue_size)). Make this a large number to disable scaling.
 no_wait_queue_size = 5
 # AxelChat doesn't provide the names of the emotes used. Emotes are normally skipped, and messages that
-# only contain emotes are completely skipped. With this set to true, messages that contain at most the value of
-# emote_only_reading_threshold emotes are acknowledged.
+# only contain emotes are completely skipped. With this set to true, emote only messages that contain at most the value
+# of emote_only_reading_threshold emotes are acknowledged.
 read_emote_only_message = false
-# Number of emotes in the message to be acknowledged if read_emote_only_message is true. Make this a large number to read all.
+# Maximum number of emotes in the message in order to be acknowledged if read_emote_only_message is true. Make this a large number to read all.
 emote_only_reading_threshold = 2
 
 # Below here platform specific rules can be configured. You can safely remove the examples in your own config.
