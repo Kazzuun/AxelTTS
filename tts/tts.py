@@ -137,7 +137,11 @@ class TTS:
         message = message_data.text_message
 
         # Messages that don't contain text are skipped
-        if message is None:
+        if message is None and (
+            not self.config().read_emote_only_message
+            or message_data.emotes_in_message > self.config().emote_only_reading_threshold
+        ):
+            logger.info(f"Message from {username} ({platform}) only contained emotes and was skipped")
             return
 
         # For non ascii usernames, get the pronounciation to allow english TTS to say it
@@ -148,26 +152,35 @@ class TTS:
             translation = await self.translator.translate(username, dest=detected_lang, src=detected_lang)
             username = translation.pronunciation
 
-        detection = await self.translator.detect(message)
-        message_language = detection.lang
-        confident = detection.confidence > self.config().translation_confidence_threshold
-
         message_parts: list[SpeakableMessagePart] = []
 
-        intro = f"{username} from {platform} said"
-        if message_language != "en" and confident:
-            intro += f" in {LANGUAGES[message_language]}"
-        message_parts.append(SpeakableMessagePart(text=intro, language="en"))
-
-        if message_language not in self.config().allowed_languages and confident:
-            # Translate any messages that are not in the allowed languages and when confident enough that
-            # it is actually that language. This allows understanding messages that are not in allowed languages
-            translated = await self.translator.translate(message, dest="en", src=message_language)
-            message_parts.append(SpeakableMessagePart(author=username, text=translated.text, language="en"))
-        elif message_language in self.config().allowed_languages:
-            message_parts.append(SpeakableMessagePart(author=username, text=message, language=message_language))
-        else:
+        # Emote only message is allowed to be read
+        if message is None:
+            emotes_sent = (
+                "an emote" if message_data.emotes_in_message == 1 else f"{message_data.emotes_in_message} emotes"
+            )
+            message = f"{username} from {platform} sent {emotes_sent}"
             message_parts.append(SpeakableMessagePart(author=username, text=message, language="en"))
+
+        else:
+            detection = await self.translator.detect(message)
+            message_language = detection.lang
+            confident = detection.confidence > self.config().translation_confidence_threshold
+
+            intro = f"{username} from {platform} said"
+            if message_language != "en" and confident:
+                intro += f" in {LANGUAGES[message_language]}"
+            message_parts.append(SpeakableMessagePart(text=intro, language="en"))
+
+            if message_language not in self.config().allowed_languages and confident:
+                # Translate any messages that are not in the allowed languages and when confident enough that
+                # it is actually that language. This allows understanding messages that are not in allowed languages
+                translated = await self.translator.translate(message, dest="en", src=message_language)
+                message_parts.append(SpeakableMessagePart(author=username, text=translated.text, language="en"))
+            elif message_language in self.config().allowed_languages:
+                message_parts.append(SpeakableMessagePart(author=username, text=message, language=message_language))
+            else:
+                message_parts.append(SpeakableMessagePart(author=username, text=message, language="en"))
 
         # Only speak if the message hasan't been cancelled and set to None
         if self._current_message is not None:

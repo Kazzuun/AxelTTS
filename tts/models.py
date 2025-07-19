@@ -38,7 +38,7 @@ class EmoteContentData(BaseModel):
     className: str
     height: int
     needSpaces: bool
-    urL: str
+    url: str
 
 
 class EmoteContent(BaseModel):
@@ -83,6 +83,10 @@ class Message(BaseModel):
             return None
         return " ".join(text_parts)
 
+    @property
+    def emotes_in_message(self) -> int:
+        return len([part for part in self.contents if isinstance(part, EmoteContent)])
+
 
 class SpeakableMessagePart(BaseModel):
     author: str | None = None
@@ -123,6 +127,9 @@ class Config(BaseModel):
 
     max_time_between_messages: float = Field(ge=0)
     no_wait_queue_size: int = Field(ge=1)
+
+    read_emote_only_message: bool
+    emote_only_reading_threshold: int
 
     @field_validator("allowed_languages", mode="before")
     @classmethod
