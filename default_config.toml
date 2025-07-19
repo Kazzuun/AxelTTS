@@ -1,6 +1,6 @@
 [app]
 name = "AxelTTS"
-version = "v0.2.1"
+version = "v0.2.2"
 
 [tts]
 # Volume is a relative multiplier and must be greater than 0
@@ -29,9 +29,18 @@ filter = [
     "\\b\\w{20,}\\b",
     # Any word contains a character that is repeated 6 or more times in a row
     "(.)\\1{5,}",
-    # Any word contains two characters that are repeated 3 or more times in a row (example: tststs)
-    "(.)(.)(\\1\\2){2,}",
+    # Any word contains two characters that are repeated 4 or more times in a row (example: tstststs)
+    "(.)(.)(\\1\\2){3,}",
+    # Any word is repeated 4 or more times in a row
+    "\\b(\\w+)\\b(\\s+\\1){3,}",
 ]
+# Time between messages scales based on number of messages in the queue. When there is only one message
+# this is the wait time between the possible next message that might come. The wait time
+# scales down linearly towards 0. Make this value 0 to make it read messages as fast as possible all the time.
+max_time_between_messages = 2.0
+# The size of the queue to be for the above wait time to have scaled to 0. The wait time with queue size N is
+# max(0, max_time_between_messages * (1 - N / no_wait_queue_size)). Make this a large number to disable scaling.
+no_wait_queue_size = 5
 
 # Below here platform specific rules can be configured. You can safely remove the examples in your own config.
 # Under [<platform>] in ignored_users, you can list all the usernames whose messages should be ignored on that platform.

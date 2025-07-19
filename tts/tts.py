@@ -108,12 +108,26 @@ class TTS:
         for message_part in message_parts:
             audio += await self._text_to_audio(message_part)
 
+        audio = audio[100:-250]
+
+        # Record here if the previous audio is alive at this point before waiting for it to stop
+        # If it is, use the wait time between messages
+        previous_audio_alive = self._audio_process is not None and self._audio_process.is_alive()
+
+        # Wait until the previous speech is done
+        while self._audio_process is not None and self._audio_process.is_alive():
+            await asyncio.sleep(0.01)
+
+        if previous_audio_alive:
+            wait_time = max(
+                0,
+                self.config().max_time_between_messages
+                * (1 - float(self.message_queue.qsize()) / self.config().no_wait_queue_size),
+            )
+            await asyncio.sleep(wait_time)
+
         self._audio_process = multiprocessing.Process(target=play, args=(audio,))
         self._audio_process.start()
-
-        # Wait until the process is done
-        while self._audio_process is not None and self._audio_process.is_alive():
-            await asyncio.sleep(0.1)
 
     async def _process_message(self, message_data: Message) -> None:
         self._current_message = message_data

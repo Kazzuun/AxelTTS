@@ -121,6 +121,9 @@ class Config(BaseModel):
 
     filter: list[str]
 
+    max_time_between_messages: float = Field(ge=0)
+    no_wait_queue_size: int = Field(ge=1)
+
     @field_validator("allowed_languages", mode="before")
     @classmethod
     def validate_languages(cls, languages: list[str]) -> list[str]:
