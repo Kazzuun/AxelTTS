@@ -182,7 +182,7 @@ class TTS:
             else:
                 message_parts.append(SpeakableMessagePart(author=username, text=message, language="en"))
 
-        # Only speak if the message hasan't been cancelled and set to None
+        # Only speak if the message hasn't been cancelled and set to None
         if self._current_message is not None:
             await self._speak(message_parts)
 
