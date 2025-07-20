@@ -108,7 +108,7 @@ class TTS:
         for message_part in message_parts:
             audio += await self._text_to_audio(message_part)
 
-        audio = audio[100:-250]
+        audio = audio[100:-200]
 
         # Record here if the previous audio is alive at this point before waiting for it to stop
         # If it is, use the wait time between messages
