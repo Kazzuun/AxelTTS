@@ -93,8 +93,8 @@ class TTSClient:
                         except ConnectionClosed as e:
                             raise e
 
-                        except Exception as e:
-                            logger.error(f"Uncaught exception: {e}")
+                        except Exception:
+                            logger.exception("Uncaught exception")
 
             except (ValueError, ValidationError) as e:
                 logger.error(f"Config file validation failed: {e}")
@@ -106,8 +106,8 @@ class TTSClient:
                 logger.info("Trying to reconnect in 5 seconds...")
                 await asyncio.sleep(5)
 
-            except Exception as e:
-                logger.error(f"Uncaught exception: {e}")
+            except Exception:
+                logger.exception("Uncaught exception")
 
     async def start(self) -> None:
         # Runs the coroutines asynchronously in parallel

@@ -200,5 +200,5 @@ class TTS:
                 logger.info("Resuming processing messages in 5 seconds...")
                 await asyncio.sleep(5)
 
-            except Exception as e:
-                logger.error(f"Uncaught exception: {e}")
+            except Exception:
+                logger.exception("Uncaught exception")
