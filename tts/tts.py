@@ -24,8 +24,8 @@ class TTS:
         self.translator = Translator()
 
         self.message_queue: asyncio.Queue[Message] = asyncio.Queue()
+        self.deleted_messages: set[str] = set()
         self._audio_process: multiprocessing.Process | None = None
-        self._current_message: Message | None = None
 
     async def new_message(self, message: Message) -> None:
         await self.message_queue.put(message)
@@ -38,43 +38,80 @@ class TTS:
         )
 
     def message_change(self, new_message: Message) -> None:
-        # Remove the deleted message from the queue
-        new_queue: asyncio.Queue[Message] = asyncio.Queue()
-        while not self.message_queue.empty():
-            message = self.message_queue.get_nowait()
-            if message.id == new_message.id and new_message.deletedOnPlatform:
-                logger.info(
-                    "Removed %s (%s) message from the queue",
-                    message.author.name,
-                    message.author.serviceId,
-                )
-                continue
-            new_queue.put_nowait(message)
-        self.message_queue = new_queue
-
-        # If the deleted message is the current one being processed, set it to None and cancel the possible audio task
-        if (
-            self._current_message is not None
-            and self._current_message.id == new_message.id
-            and new_message.deletedOnPlatform
-        ):
-            self._current_message = None
-            if self._audio_process is not None:
-                self._audio_process.terminate()
-            logger.info("Removed the current message from being processed")
+        if new_message.deletedOnPlatform:
+            self.deleted_messages.add(new_message.id)
 
     def clear_messages(self) -> None:
-        # Clear queue by replacing it with an empty one
         queue_size = self.message_queue.qsize()
-        self.message_queue = asyncio.Queue()
+        while not self.message_queue.empty():
+            self.message_queue.get_nowait()
         logger.info("Cleared all the messages (%d) from the queue", queue_size)
 
-        # Also cancel the possible current message
-        if self._current_message is not None:
-            self._current_message = None
-            if self._audio_process is not None:
-                self._audio_process.terminate()
-            logger.info("Removed the current message from being processed")
+    async def _username_pronounciation(self, username: str) -> str:
+        if username.isascii():
+            return username
+
+        # For non ascii usernames, get the pronounciation to allow english TTS to say it
+        name_lang = await self.translator.detect(username)
+        detected_lang = name_lang.lang
+        # Translate to the same language just to get the pronounciation
+        translation = await self.translator.translate(username, dest=detected_lang, src=detected_lang)
+        return translation.pronunciation
+
+    async def _construct_message_parts(
+        self, username: str, platform: str, message: str | None, emotes_in_message: int
+    ) -> list[SpeakableMessagePart]:
+        # Emote only message is allowed to be read
+        if message is None:
+            emotes_sent = "an emote" if emotes_in_message == 1 else f"{emotes_in_message} emotes"
+            message = f"{username} from {platform} sent {emotes_sent}"
+            return [SpeakableMessagePart(author=username, text=message, language="en")]
+
+        message_parts: list[SpeakableMessagePart] = []
+
+        detection = await self.translator.detect(message)
+
+        confident = detection.confidence > self.config().translation_confidence_threshold
+        message_language = detection.lang
+        if message_language not in LANGUAGES:
+            logger.info(
+                "Unsupported language (%s) detected in message '%s', assuming english", message_language, message
+            )
+            message_language = "en"
+
+        intro = f"{username} from {platform} said"
+        if message_language != "en" and confident:
+            intro += f" in {LANGUAGES[message_language]}"
+        message_parts.append(SpeakableMessagePart(text=intro, language="en"))
+
+        if message_language not in self.config().allowed_languages and confident:
+            # Translate any messages that are not in the allowed languages and when confident enough that
+            # it is actually that language. This allows understanding messages that are not in allowed languages
+            translated = await self.translator.translate(message, dest="en", src=message_language)
+            message_parts.append(SpeakableMessagePart(author=username, text=translated.text, language="en"))
+        elif message_language in self.config().allowed_languages:
+            message_parts.append(SpeakableMessagePart(author=username, text=message, language=message_language))
+        else:
+            message_parts.append(SpeakableMessagePart(author=username, text=message, language="en"))
+
+        return message_parts
+
+    async def _wait_before_speaking(self) -> None:
+        # Record here if the previous audio is alive at this point before waiting for it to stop
+        # If it is, use the wait time between messages
+        previous_audio_alive = self._audio_process is not None and self._audio_process.is_alive()
+
+        # Wait until the previous speech is done
+        while self._audio_process is not None and self._audio_process.is_alive():
+            await asyncio.sleep(0.01)
+
+        if previous_audio_alive:
+            wait_time = max(
+                0,
+                self.config().max_time_between_messages
+                * (1 - float(self.message_queue.qsize()) / self.config().no_wait_queue_size),
+            )
+            await asyncio.sleep(wait_time)
 
     def _english_accent(self, user: str | None) -> str:
         if user is None:
@@ -103,95 +140,51 @@ class TTS:
 
         return audio
 
-    async def _speak(self, message_parts: list[SpeakableMessagePart]) -> None:
+    async def _construct_audio(self, message_parts: list[SpeakableMessagePart]) -> AudioSegment:
         audio = AudioSegment.empty()
         for message_part in message_parts:
             audio += await self._text_to_audio(message_part)
 
         audio = audio[100:-200]
+        return audio  # type: ignore
 
-        # Record here if the previous audio is alive at this point before waiting for it to stop
-        # If it is, use the wait time between messages
-        previous_audio_alive = self._audio_process is not None and self._audio_process.is_alive()
-
-        # Wait until the previous speech is done
-        while self._audio_process is not None and self._audio_process.is_alive():
-            await asyncio.sleep(0.01)
-
-        if previous_audio_alive:
-            wait_time = max(
-                0,
-                self.config().max_time_between_messages
-                * (1 - float(self.message_queue.qsize()) / self.config().no_wait_queue_size),
-            )
-            await asyncio.sleep(wait_time)
-
+    async def _speak(self, audio: AudioSegment) -> None:
         self._audio_process = multiprocessing.Process(target=play, args=(audio,))
         self._audio_process.start()
 
     async def _process_message(self, message_data: Message) -> None:
-        self._current_message = message_data
-
-        username = message_data.author.name
-        platform = message_data.author.serviceId
-        message = message_data.text_message
-
-        # Messages that don't contain text are skipped
-        if message is None and (
-            not self.config().read_emote_only_message
-            or message_data.emotes_in_message > self.config().emote_only_reading_threshold
-        ):
-            logger.info(f"Message from {username} ({platform}) only contained emotes and was skipped")
-            return
-
-        # For non ascii usernames, get the pronounciation to allow english TTS to say it
-        if not username.isascii():
-            name_lang = await self.translator.detect(username)
-            detected_lang = name_lang.lang
-            # Translate to the same language just to get the pronounciation
-            translation = await self.translator.translate(username, dest=detected_lang, src=detected_lang)
-            username = translation.pronunciation
-
-        message_parts: list[SpeakableMessagePart] = []
-
-        # Emote only message is allowed to be read
-        if message is None:
-            emotes_sent = (
-                "an emote" if message_data.emotes_in_message == 1 else f"{message_data.emotes_in_message} emotes"
-            )
-            message = f"{username} from {platform} sent {emotes_sent}"
-            message_parts.append(SpeakableMessagePart(author=username, text=message, language="en"))
-
-        else:
-            detection = await self.translator.detect(message)
-            message_language = detection.lang
-            confident = detection.confidence > self.config().translation_confidence_threshold
-
-            intro = f"{username} from {platform} said"
-            if message_language != "en" and confident:
-                intro += f" in {LANGUAGES[message_language]}"
-            message_parts.append(SpeakableMessagePart(text=intro, language="en"))
-
-            if message_language not in self.config().allowed_languages and confident:
-                # Translate any messages that are not in the allowed languages and when confident enough that
-                # it is actually that language. This allows understanding messages that are not in allowed languages
-                translated = await self.translator.translate(message, dest="en", src=message_language)
-                message_parts.append(SpeakableMessagePart(author=username, text=translated.text, language="en"))
-            elif message_language in self.config().allowed_languages:
-                message_parts.append(SpeakableMessagePart(author=username, text=message, language=message_language))
-            else:
-                message_parts.append(SpeakableMessagePart(author=username, text=message, language="en"))
-
-        # Only speak if the message hasn't been cancelled and set to None
-        if self._current_message is not None:
-            await self._speak(message_parts)
-
-        self._current_message = None
+        username = await self._username_pronounciation(message_data.author.name)
+        message_parts = await self._construct_message_parts(
+            username, message_data.author.serviceId, message_data.text_message, message_data.emotes_in_message
+        )
+        audio = await self._construct_audio(message_parts)
+        await self._wait_before_speaking()
+        await self._speak(audio)
 
     async def consume_messages(self) -> Never:
         while True:
             try:
                 message_data = await self.message_queue.get()
+
+                if message_data.id in self.deleted_messages:
+                    logger.info(
+                        "Skipping %s (%s)'s message because it was deleted (%d messages left)",
+                        message_data.author.name,
+                        message_data.author.serviceId,
+                        self.message_queue.qsize(),
+                    )
+                    continue
+
+                elif message_data.text_message is None and (
+                    not self.config().read_emote_only_message
+                    or message_data.emotes_in_message > self.config().emote_only_reading_threshold
+                ):
+                    logger.info(
+                        "Message from %s (%s) only contained emotes and was skipped",
+                        message_data.author.name,
+                        message_data.author.serviceId,
+                    )
+                    continue
 
                 logger.info(
                     "Processing %s (%s)'s message from the queue (%d messages left)",
