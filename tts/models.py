@@ -12,12 +12,8 @@ class Author(BaseModel):
     color: str
     customBackgroundColor: str
     id: str
-    leftBadges: list[str]
-    leftTags: list[str]
     name: str
     pageUrl: str
-    rightBadges: list[str]
-    rightTags: list[str]
     serviceBadge: str
     serviceId: str
 
@@ -28,8 +24,6 @@ class TextContentData(BaseModel):
 
 class TextContent(BaseModel):
     data: TextContentData
-    htmlClassName: str
-    style: dict
     type: str
 
 
@@ -43,8 +37,6 @@ class EmoteContentData(BaseModel):
 
 class EmoteContent(BaseModel):
     data: EmoteContentData
-    htmlClassName: str
-    style: dict
     type: str
 
 
